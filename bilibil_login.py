@@ -7,6 +7,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import base64
+import random
 
 
 class LoginBiliBili:
@@ -22,7 +23,7 @@ class LoginBiliBili:
         # 定义浏览器
         self.browser = webdriver.Chrome()
         # 定义显示等待
-        self.wait = WebDriverWait(self.browser, 50)
+        self.wait = WebDriverWait(self.browser, 20)
         # bilibili登录url
         self.url = 'https://passport.bilibili.com/login'
 
@@ -31,29 +32,22 @@ class LoginBiliBili:
         打开浏览器, 进入登陆界面
         输入用户名, 密码
         点击登陆
-
         :return: None
         """
         # 打开浏览器, 进入登陆界面
         self.browser.get(self.url)
 
         # 用户名输入框
-        username_input_box = self.wait.until(
-            EC.presence_of_element_located((By.XPATH, '//*[@id="login-username"]'))
-        )
+        self.wait.until(
+            EC.presence_of_element_located((By.ID, 'login-username'))
+        ).send_keys(self.username)
         # 清空用户名输入框
-        username_input_box.clear()
-        # 将自己的用户名输入到用户名输入框
-        username_input_box.send_keys(self.username)
 
         # 密码输入框
-        password_input_box = self.wait.until(
-            EC.presence_of_element_located((By.XPATH, '//*[@id="login-passwd"]'))
-        )
+        self.wait.until(
+            EC.presence_of_element_located((By.ID, 'login-passwd'))
+        ).send_keys(self.password)
         # 清空密码输入框
-        password_input_box.clear()
-        # 将自己的密码输入到密码输入框
-        password_input_box.send_keys(self.password)
 
         # 登录按钮
         login_button = self.wait.until(
@@ -67,7 +61,7 @@ class LoginBiliBili:
     def get_geetest_image(self):
         """
         获取极验验证码图片
-        :return: c_image(王者验证图) ic_image(有缺失的验证图)
+        :return: image1(王者验证图) image2(有缺失的验证图)
         """
         """
         完整的验证图
@@ -75,58 +69,38 @@ class LoginBiliBili:
         <canvas class="geetest_canvas_fullbg geetest_fade geetest_absolute" 
         height="160" width="260" style="display: none;"></canvas>
         """
-        image_name = ['c_image.png', 'ic_image.png']
-        # 执行js 拿到canvas画布里面的图片数据
-        js = f'return document.getElementsByClassName("geetest_canvas_fullbg")[0].toDataURL("image/png");'
-        # 图片数据
-        complete_img_data = self.browser.execute_script(js)
-        # base64 编码的图片信息
-        complete_img_base64 = complete_img_data.split(',')[1]
-        # 转成bytes类型
-        complete_img = base64.b64decode(complete_img_base64)
-        # 加载图片 return 回去对比
-        c_image = Image.open(BytesIO(complete_img))
-        # c_image.show()
-        # 保存图片 (可不必保存)
-        c_image.save('c_image.png')
+        image_name = ['geetest_canvas_fullbg', 'geetest_canvas_bg']
+        image = []
+        for i in range(0, 2):
+            # 执行js 拿到canvas画布里面的图片数据
+            js = f'return document.getElementsByClassName("{image_name[i]}")[0].toDataURL("image/png");'
+            # 图片数据
+            complete_img_data = self.browser.execute_script(js)
+            # base64 编码的图片信息
+            complete_img_base64 = complete_img_data.split(',')[1]
+            # 转成bytes类型
+            complete_img = base64.b64decode(complete_img_base64)
+            # 加载图片 return 回去对比
+            image_c = Image.open(BytesIO(complete_img))
+            image_c.save(f'image{i + 1}.png')
+            image.append(image_c)
 
-        """
-        有缺失的验证码图
+        return image
 
-        页面源码:
-        <canvas class="geetest_canvas_bg geetest_absolute" height="160" width="260"></canvas>
-        """
-        # 执行js 拿到canvas画布里的图片数据
-        js = 'return document.getElementsByClassName("geetest_canvas_bg")[0].toDataURL("image/png");'
-        # 图片数据
-        incomplete_img_data = self.browser.execute_script(js)
-        # base64 编码的图片信息
-        incomplete_img_base64 = incomplete_img_data.split(',')[1]
-        # 转为bytes类型
-        incomplete_img = base64.b64decode(incomplete_img_base64)
-        # 直接加载图片 return 回去对比
-        ic_image = Image.open(BytesIO(incomplete_img))
-        # ic_image.show()
-        # 保存图片(可不必保存)
-        ic_image.save('ic_image.png')
-
-        return c_image, ic_image
-
-    def is_pixel_similar(self, c_image, ic_image, x, y):
+    def is_pixel_similar(self, image1, image2, x, y):
         """
         比较两张图片的像素点
-
         注意: 像素点比较是有偏差的, 需要允许一定范围的误差,
             我们可以设置一个阈值
-        :param ic_image:
-        :param c_image:
+        :param image2:
+        :param image1:
         :param x:
         :param y:
         :return: 当像素点不相同时, 返回 False
         """
         # 获取两张图片执行位置的像素点
-        c_pixel = c_image.load()[x, y]
-        ic_pixel = ic_image.load()[x, y]
+        c_pixel = image1.load()[x, y]
+        ic_pixel = image2.load()[x, y]
         # 阈值 允许误差
         threshold = 10
         # 对比
@@ -136,21 +110,19 @@ class LoginBiliBili:
             return True
         return False
 
-    def get_slice_gap(self, c_image, ic_image):
+    def get_slice_gap(self, image1, image2):
         """
         获取缺口的偏移量
-
         通过比较两张图片的所有像素点, 获取两张图片是从哪里开始不同
         从而得到 移动块 要在 x 方向移动的距离
-
-        :param c_image: 完整的图片
-        :param ic_image: 有缺失的图片
+        :param image1: 完整的图片
+        :param image2: 有缺失的图片
         :return: 缺口的偏移量
         """
-        # ic_image.size:['width', 'height']
-        for x in range(c_image.size[0]):
-            for y in range(c_image.size[1]):
-                if not self.is_pixel_similar(c_image, ic_image, x, y):
+        # image2.size:['width', 'height']
+        for x in range(image1.size[0]):
+            for y in range(image1.size[1]):
+                if not self.is_pixel_similar(image1, image2, x, y):
                     # 移动块只在水平方向移动 只需返回 x
                     return x
 
@@ -163,7 +135,7 @@ class LoginBiliBili:
         # 移动轨迹
         track = []
         # 当前位移
-        current = 1
+        current = 0
         # 减速阈值
 
         mid = distance * 4 / 5
@@ -175,10 +147,10 @@ class LoginBiliBili:
         while current < distance:
             if current < mid:
                 # 加速度为正2
-                a = 2
+                a = 20
             else:
                 # 加速度为负3
-                a = -3
+                a = -30
             # 初速度v0
             v0 = v
             # 当前速度v = v0 + at
@@ -201,7 +173,7 @@ class LoginBiliBili:
         ActionChains(self.browser).click_and_hold(slider).perform()
         for x in tracks:
             ActionChains(self.browser).move_by_offset(xoffset=x, yoffset=0).perform()
-        time.sleep(0.5)
+        time.sleep(random.random())
         ActionChains(self.browser).release().perform()
 
     def get_geetest_button(self):
@@ -228,20 +200,18 @@ class LoginBiliBili:
     def login(self):
         """
         开始
-
         :return: None
         """
         # 打开浏览器, 输入账号 密码, 点击登陆
         self.open()
-        # 获取验证图 ic_image(有缺失的验证图) c_image(完整的验证图)
-        c_image, ic_image = self.get_geetest_image()
+        # 获取验证图 image2(有缺失的验证图) image1(完整的验证图)
+        image1, image2 = self.get_geetest_image()
 
         # 获取缺口的偏移量
-        gap = self.get_slice_gap(c_image, ic_image)
+        gap = self.get_slice_gap(image1, image2)
 
         print(f'缺口的偏移量为:{gap}')
-        # 拖动滑块
-        # TODO 这边一直有一定的误差 暂时用测量工具解决
+        # 拖动滑块 有误差-8
         track = self.get_track(gap - 8)
         slider = self.get_geetest_button()
         self.move_to_gap(slider, track)
@@ -254,5 +224,5 @@ class LoginBiliBili:
 
 
 if __name__ == '__main__':
-    login = LoginBiliBili('....', '....')
+    login = LoginBiliBili('----', '----')
     login.login()
