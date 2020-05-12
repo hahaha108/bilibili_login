@@ -51,7 +51,7 @@ class LoginBiliBili:
 
         # 登录按钮
         login_button = self.wait.until(
-            EC.presence_of_element_located((By.XPATH, '//*[@id="geetest-wrap"]/ul/li[5]/a[1]'))
+            EC.presence_of_element_located((By.XPATH, '//*[@id="geetest-wrap"]/div/div[5]/a[1]'))
         )
         # 点击登录
         login_button.click()
@@ -102,7 +102,7 @@ class LoginBiliBili:
         c_pixel = image1.load()[x, y]
         ic_pixel = image2.load()[x, y]
         # 阈值 允许误差
-        threshold = 10
+        threshold = 30
         # 对比
         if abs(c_pixel[0] - ic_pixel[0]) < threshold and \
                 abs(c_pixel[1] - ic_pixel[1]) < threshold and \
@@ -147,20 +147,25 @@ class LoginBiliBili:
         while current < distance:
             if current < mid:
                 # 加速度为正2
-                a = 20
+                a = random.randint(40,45)
             else:
                 # 加速度为负3
-                a = -30
+                a = 0 - random.randint(45,50)
             # 初速度v0
             v0 = v
             # 当前速度v = v0 + at
             v = v0 + a * t
             # 移动距离x = v0t + 1/2 * a * t^2
             move = v0 * t + 1 / 2 * a * t * t
+
             # 当前位移
-            current += move
+            current += round(move)
             # 加入轨迹
-            track.append(round(move))
+            if current < distance:
+                track.append(round(move))
+            else:
+                track.append(round(distance - current + round(move)))
+
         return track
 
     def move_to_gap(self, slider, tracks):
@@ -172,7 +177,7 @@ class LoginBiliBili:
         """
         ActionChains(self.browser).click_and_hold(slider).perform()
         for x in tracks:
-            ActionChains(self.browser).move_by_offset(xoffset=x, yoffset=0).perform()
+            ActionChains(self.browser).move_by_offset(xoffset=x, yoffset=random.randint(0,4)).perform()
         time.sleep(random.random())
         ActionChains(self.browser).release().perform()
 
@@ -224,5 +229,7 @@ class LoginBiliBili:
 
 
 if __name__ == '__main__':
-    login = LoginBiliBili('----', '----')
+    username = "test_login"
+    password = "123456"
+    login = LoginBiliBili(username, password)
     login.login()
